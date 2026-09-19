@@ -1,11 +1,23 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Depends
+from fastapi import (
+    FastAPI,
+    UploadFile,
+    File,
+    HTTPException,
+    Form,
+    Depends,
+)
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import (
+    HTTPBearer,
+    HTTPAuthorizationCredentials,
+)
+
 import jwt
+import bcrypt
 
 import sqlite3
 from pathlib import Path
@@ -16,7 +28,6 @@ import json
 from math import radians, sin, cos, sqrt, atan2
 
 from pydantic import BaseModel, Field
-from passlib.hash import bcrypt
 
 from traffic_processor import (
     UPLOAD_DIR,
@@ -36,16 +47,11 @@ app = FastAPI(title="TrafficIQ API")
 # =========================================================
 # CORS
 # =========================================================
-# Allows the deployed Vercel frontend and local development
-# frontend to communicate with Railway backend.
+# Allows frontend requests from Vercel and local development.
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://traffic-iq-sigma.vercel.app",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -62,7 +68,7 @@ DATABASE_NAME = "traffic.db"
 def get_db_connection():
     connection = sqlite3.connect(
         DATABASE_NAME,
-        timeout=30
+        timeout=30,
     )
     connection.execute("PRAGMA foreign_keys = ON")
     return connection
@@ -103,7 +109,7 @@ def get_current_user(
         if not user_id or not email:
             raise HTTPException(
                 status_code=401,
-                detail="Invalid authentication token."
+                detail="Invalid authentication token.",
             )
 
         return {
@@ -115,13 +121,13 @@ def get_current_user(
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=401,
-            detail="Authentication token has expired."
+            detail="Authentication token has expired.",
         )
 
     except jwt.InvalidTokenError:
         raise HTTPException(
             status_code=401,
-            detail="Invalid authentication token."
+            detail="Invalid authentication token.",
         )
 
 
@@ -133,7 +139,7 @@ def get_current_user(
 def home():
     return {
         "project": "TrafficIQ",
-        "status": "Backend is running."
+        "status": "Backend is running.",
     }
 
 
@@ -142,7 +148,9 @@ def home():
 # =========================================================
 
 @app.get("/auth/me")
-def auth_me(current_user: dict = Depends(get_current_user)):
+def auth_me(
+    current_user: dict = Depends(get_current_user),
+):
     return {
         "message": "Authentication successful.",
         "user": current_user,
@@ -260,29 +268,38 @@ def signup(user: SignupRequest):
     password = user.password
 
     # -----------------------------------------------------
-    # Validation
+    # VALIDATION
     # -----------------------------------------------------
 
     if not name:
         raise HTTPException(
             status_code=400,
-            detail="Name is required."
+            detail="Name is required.",
         )
 
     if not email:
         raise HTTPException(
             status_code=400,
-            detail="Email is required."
+            detail="Email is required.",
         )
 
     if len(password) < 6:
         raise HTTPException(
             status_code=400,
-            detail="Password must be at least 6 characters."
+            detail="Password must be at least 6 characters.",
+        )
+
+    # BCrypt supports passwords up to 72 bytes.
+    password_bytes = password.encode("utf-8")
+
+    if len(password_bytes) > 72:
+        raise HTTPException(
+            status_code=400,
+            detail="Password must be 72 bytes or fewer.",
         )
 
     # -----------------------------------------------------
-    # Database
+    # DATABASE
     # -----------------------------------------------------
 
     connection = get_db_connection()
@@ -296,7 +313,7 @@ def signup(user: SignupRequest):
             FROM users
             WHERE email = ?
             """,
-            (email,)
+            (email,),
         )
 
         existing_user = cursor.fetchone()
@@ -304,10 +321,17 @@ def signup(user: SignupRequest):
         if existing_user:
             raise HTTPException(
                 status_code=400,
-                detail="An account with this email already exists."
+                detail="An account with this email already exists.",
             )
 
-        password_hash = bcrypt.hash(password)
+        # -------------------------------------------------
+        # HASH PASSWORD USING BCRYPT
+        # -------------------------------------------------
+
+        password_hash = bcrypt.hashpw(
+            password_bytes,
+            bcrypt.gensalt(),
+        ).decode("utf-8")
 
         cursor.execute(
             """
@@ -322,8 +346,8 @@ def signup(user: SignupRequest):
             (
                 name,
                 email,
-                password_hash
-            )
+                password_hash,
+            ),
         )
 
         user_id = cursor.lastrowid
@@ -336,7 +360,7 @@ def signup(user: SignupRequest):
                 "id": user_id,
                 "name": name,
                 "email": email,
-            }
+            },
         }
 
     except HTTPException:
@@ -348,7 +372,7 @@ def signup(user: SignupRequest):
 
         raise HTTPException(
             status_code=400,
-            detail="An account with this email already exists."
+            detail="An account with this email already exists.",
         )
 
     except Exception as error:
@@ -358,7 +382,7 @@ def signup(user: SignupRequest):
 
         raise HTTPException(
             status_code=500,
-            detail="Unable to create account."
+            detail="Unable to create account.",
         )
 
     finally:
@@ -384,17 +408,33 @@ def login(user: LoginRequest):
     email = user.email.strip().lower()
     password = user.password
 
+    # -----------------------------------------------------
+    # VALIDATION
+    # -----------------------------------------------------
+
     if not email:
         raise HTTPException(
             status_code=400,
-            detail="Email is required."
+            detail="Email is required.",
         )
 
     if not password:
         raise HTTPException(
             status_code=400,
-            detail="Password is required."
+            detail="Password is required.",
         )
+
+    password_bytes = password.encode("utf-8")
+
+    if len(password_bytes) > 72:
+        raise HTTPException(
+            status_code=400,
+            detail="Password must be 72 bytes or fewer.",
+        )
+
+    # -----------------------------------------------------
+    # GET USER
+    # -----------------------------------------------------
 
     connection = get_db_connection()
     cursor = connection.cursor()
@@ -419,31 +459,40 @@ def login(user: LoginRequest):
     if db_user is None:
         raise HTTPException(
             status_code=401,
-            detail="Invalid email or password."
+            detail="Invalid email or password.",
         )
 
     user_id, name, db_email, password_hash = db_user
 
+    # -----------------------------------------------------
+    # VERIFY PASSWORD
+    # -----------------------------------------------------
+
     try:
-        password_valid = bcrypt.verify(
-            password,
-            password_hash
+
+        password_valid = bcrypt.checkpw(
+            password_bytes,
+            password_hash.encode("utf-8"),
         )
-    except Exception:
+
+    except Exception as error:
+
+        print("Password verification error:", error)
         password_valid = False
 
     if not password_valid:
         raise HTTPException(
             status_code=401,
-            detail="Invalid email or password."
+            detail="Invalid email or password.",
         )
 
     # =====================================================
     # CREATE JWT TOKEN
     # =====================================================
 
-    token_expiration = datetime.now(timezone.utc) + timedelta(
-        minutes=JWT_EXPIRATION_MINUTES
+    token_expiration = (
+        datetime.now(timezone.utc)
+        + timedelta(minutes=JWT_EXPIRATION_MINUTES)
     )
 
     token_payload = {
@@ -477,13 +526,19 @@ def login(user: LoginRequest):
 
 class TrafficReportRequest(BaseModel):
     category: str
-    description: str = Field(min_length=5, max_length=500)
-    location: str = Field(min_length=2, max_length=200)
+    description: str = Field(
+        min_length=5,
+        max_length=500,
+    )
+    location: str = Field(
+        min_length=2,
+        max_length=200,
+    )
     latitude: float | None = None
     longitude: float | None = None
     suggested_route: str | None = Field(
         default=None,
-        max_length=300
+        max_length=300,
     )
     severity: str = "MEDIUM"
 
@@ -491,7 +546,7 @@ class TrafficReportRequest(BaseModel):
 class TrafficCommentRequest(BaseModel):
     comment: str = Field(
         min_length=1,
-        max_length=300
+        max_length=300,
     )
 
 
@@ -563,6 +618,7 @@ def get_community_reports():
     reports = []
 
     for data in rows:
+
         reports.append({
             "id": data[0],
             "category": data[1],
@@ -592,7 +648,7 @@ def get_community_reports():
 @app.post("/community/reports")
 def create_community_report(
     report: TrafficReportRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
 ):
 
     category = report.category.strip()
@@ -601,13 +657,13 @@ def create_community_report(
     if category not in ALLOWED_REPORT_CATEGORIES:
         raise HTTPException(
             status_code=400,
-            detail="Invalid traffic report category."
+            detail="Invalid traffic report category.",
         )
 
     if severity not in ALLOWED_SEVERITY:
         raise HTTPException(
             status_code=400,
-            detail="Invalid report severity."
+            detail="Invalid report severity.",
         )
 
     connection = get_db_connection()
@@ -644,7 +700,9 @@ def create_community_report(
     ))
 
     connection.commit()
+
     report_id = cursor.lastrowid
+
     connection.close()
 
     return {
@@ -660,7 +718,7 @@ def create_community_report(
 @app.post("/community/reports/{report_id}/confirm")
 def confirm_report(
     report_id: int,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
 ):
 
     connection = get_db_connection()
@@ -672,17 +730,18 @@ def confirm_report(
         FROM traffic_reports
         WHERE id = ?
         """,
-        (report_id,)
+        (report_id,),
     )
 
     report_exists = cursor.fetchone()
 
     if report_exists is None:
+
         connection.close()
 
         raise HTTPException(
             status_code=404,
-            detail="Traffic report not found."
+            detail="Traffic report not found.",
         )
 
     try:
@@ -700,10 +759,14 @@ def confirm_report(
         ))
 
         connection.commit()
+
         message = "Report confirmed."
 
     except sqlite3.IntegrityError:
-        message = "You have already confirmed this report."
+
+        message = (
+            "You have already confirmed this report."
+        )
 
     connection.close()
 
@@ -735,15 +798,17 @@ def get_report_comments(report_id: int):
         WHERE c.report_id = ?
         ORDER BY c.id ASC
         """,
-        (report_id,)
+        (report_id,),
     )
 
     rows = cursor.fetchall()
+
     connection.close()
 
     comments = []
 
     for data in rows:
+
         comments.append({
             "id": data[0],
             "comment": data[1],
@@ -765,7 +830,7 @@ def get_report_comments(report_id: int):
 def add_report_comment(
     report_id: int,
     comment_data: TrafficCommentRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
 ):
 
     connection = get_db_connection()
@@ -777,17 +842,18 @@ def add_report_comment(
         FROM traffic_reports
         WHERE id = ?
         """,
-        (report_id,)
+        (report_id,),
     )
 
     report_exists = cursor.fetchone()
 
     if report_exists is None:
+
         connection.close()
 
         raise HTTPException(
             status_code=404,
-            detail="Traffic report not found."
+            detail="Traffic report not found.",
         )
 
     cursor.execute("""
@@ -805,7 +871,9 @@ def add_report_comment(
     ))
 
     connection.commit()
+
     comment_id = cursor.lastrowid
+
     connection.close()
 
     return {
@@ -821,7 +889,7 @@ def add_report_comment(
 @app.post("/community/reports/{report_id}/resolve")
 def resolve_report(
     report_id: int,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
 ):
 
     connection = get_db_connection()
@@ -831,24 +899,29 @@ def resolve_report(
         SELECT user_id
         FROM traffic_reports
         WHERE id = ?
-        """, (report_id,))
+    """, (report_id,))
 
     report = cursor.fetchone()
 
     if report is None:
+
         connection.close()
 
         raise HTTPException(
             status_code=404,
-            detail="Traffic report not found."
+            detail="Traffic report not found.",
         )
 
     if report[0] != current_user["id"]:
+
         connection.close()
 
         raise HTTPException(
             status_code=403,
-            detail="Only the report creator can resolve this report."
+            detail=(
+                "Only the report creator can "
+                "resolve this report."
+            ),
         )
 
     cursor.execute("""
@@ -861,7 +934,7 @@ def resolve_report(
     connection.close()
 
     return {
-        "message": "Traffic report marked as resolved."
+        "message": "Traffic report marked as resolved.",
     }
 
 
@@ -869,7 +942,10 @@ def resolve_report(
 # REVERSE GEOCODING
 # =========================================================
 
-def reverse_geocode(latitude: float, longitude: float):
+def reverse_geocode(
+    latitude: float,
+    longitude: float,
+):
 
     try:
 
@@ -890,17 +966,23 @@ def reverse_geocode(latitude: float, longitude: float):
         request = Request(
             url,
             headers={
-                "User-Agent": "TrafficIQ/1.0"
+                "User-Agent": "TrafficIQ/1.0",
             },
         )
 
-        with urlopen(request, timeout=10) as response:
+        with urlopen(
+            request,
+            timeout=10,
+        ) as response:
 
             data = json.loads(
                 response.read().decode("utf-8")
             )
 
-        address = data.get("address", {})
+        address = data.get(
+            "address",
+            {}
+        )
 
         neighbourhood = (
             address.get("neighbourhood")
@@ -924,16 +1006,20 @@ def reverse_geocode(latitude: float, longitude: float):
         ]
 
         location_name = ", ".join(
-            part for part in parts if part
+            part for part in parts
+            if part
         )
 
-        return location_name or data.get("display_name")
+        return (
+            location_name
+            or data.get("display_name")
+        )
 
     except Exception as error:
 
         print(
             "Reverse geocoding error:",
-            error
+            error,
         )
 
         return None
@@ -961,6 +1047,7 @@ def traffic_data():
     connection.close()
 
     if data is None:
+
         return {
             "message": "No traffic data available"
         }
@@ -977,9 +1064,15 @@ def traffic_data():
         "peak_vehicles": data[8],
         "congestion": data[9],
         "location": data[10] if len(data) > 10 else None,
-        "location_source": data[11] if len(data) > 11 else None,
-        "latitude": data[12] if len(data) > 12 else None,
-        "longitude": data[13] if len(data) > 13 else None,
+        "location_source": (
+            data[11] if len(data) > 11 else None
+        ),
+        "latitude": (
+            data[12] if len(data) > 12 else None
+        ),
+        "longitude": (
+            data[13] if len(data) > 13 else None
+        ),
     }
 
 
@@ -1019,15 +1112,23 @@ def traffic_history():
             "average_vehicles": data[7],
             "peak_vehicles": data[8],
             "congestion": data[9],
-            "location": data[10] if len(data) > 10 else None,
-            "location_source": data[11] if len(data) > 11 else None,
-            "latitude": data[12] if len(data) > 12 else None,
-            "longitude": data[13] if len(data) > 13 else None,
+            "location": (
+                data[10] if len(data) > 10 else None
+            ),
+            "location_source": (
+                data[11] if len(data) > 11 else None
+            ),
+            "latitude": (
+                data[12] if len(data) > 12 else None
+            ),
+            "longitude": (
+                data[13] if len(data) > 13 else None
+            ),
         })
 
     return {
         "count": len(history),
-        "history": history
+        "history": history,
     }
 
 
@@ -1037,7 +1138,7 @@ def traffic_history():
 
 @app.get("/my-history")
 def my_history(
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
 ):
 
     connection = get_db_connection()
@@ -1105,7 +1206,7 @@ def my_history(
 @app.get("/traffic/near-me")
 def traffic_near_me(
     latitude: float,
-    longitude: float
+    longitude: float,
 ):
 
     connection = get_db_connection()
@@ -1139,16 +1240,19 @@ def traffic_near_me(
     connection.close()
 
     if not rows:
+
         return {
             "found": False,
-            "message": "No location-based traffic data available."
+            "message": (
+                "No location-based traffic data available."
+            ),
         }
 
     def calculate_distance(
         lat1,
         lon1,
         lat2,
-        lon2
+        lon2,
     ):
 
         earth_radius_km = 6371
@@ -1170,7 +1274,7 @@ def traffic_near_me(
 
         c = 2 * atan2(
             sqrt(a),
-            sqrt(1 - a)
+            sqrt(1 - a),
         )
 
         return earth_radius_km * c
@@ -1187,7 +1291,7 @@ def traffic_near_me(
             latitude,
             longitude,
             record_latitude,
-            record_longitude
+            record_longitude,
         )
 
         if (
@@ -1199,16 +1303,17 @@ def traffic_near_me(
             nearest_record = data
 
     if nearest_record is None:
+
         return {
             "found": False,
-            "message": "No nearby traffic data found."
+            "message": "No nearby traffic data found.",
         }
 
     return {
         "found": True,
         "distance_km": round(
             nearest_distance,
-            2
+            2,
         ),
         "traffic": {
             "id": nearest_record[0],
@@ -1225,7 +1330,7 @@ def traffic_near_me(
             "location_source": nearest_record[11],
             "latitude": nearest_record[12],
             "longitude": nearest_record[13],
-        }
+        },
     }
 
 
@@ -1236,19 +1341,19 @@ def traffic_near_me(
 @app.get("/reverse-geocode")
 def reverse_geocode_endpoint(
     latitude: float,
-    longitude: float
+    longitude: float,
 ):
 
     location_name = reverse_geocode(
         latitude,
-        longitude
+        longitude,
     )
 
     if not location_name:
 
         raise HTTPException(
             status_code=404,
-            detail="Unable to determine location name."
+            detail="Unable to determine location name.",
         )
 
     return {
@@ -1273,15 +1378,15 @@ def traffic_video():
 
         raise HTTPException(
             status_code=404,
-            detail="Default traffic video not found."
+            detail="Default traffic video not found.",
         )
 
     return FileResponse(
         video_path,
         media_type="video/mp4",
         headers={
-            "Content-Disposition": "inline"
-        }
+            "Content-Disposition": "inline",
+        },
     )
 
 
@@ -1306,17 +1411,19 @@ def processed_media(file_path: str):
 
         raise HTTPException(
             status_code=400,
-            detail="Invalid media path."
+            detail="Invalid media path.",
         )
 
     if not requested_path.exists():
 
         raise HTTPException(
             status_code=404,
-            detail="Processed media not found."
+            detail="Processed media not found.",
         )
 
-    extension = requested_path.suffix.lower()
+    extension = (
+        requested_path.suffix.lower()
+    )
 
     # -----------------------------------------------------
     # IMAGE
@@ -1325,7 +1432,7 @@ def processed_media(file_path: str):
     if extension in {
         ".jpg",
         ".jpeg",
-        ".png"
+        ".png",
     }:
 
         media_type = (
@@ -1345,7 +1452,7 @@ def processed_media(file_path: str):
     elif extension in {
         ".avi",
         ".mov",
-        ".mkv"
+        ".mkv",
     }:
 
         media_type = "video"
@@ -1354,15 +1461,15 @@ def processed_media(file_path: str):
 
         raise HTTPException(
             status_code=400,
-            detail="Unsupported processed media."
+            detail="Unsupported processed media.",
         )
 
     return FileResponse(
         requested_path,
         media_type=media_type,
         headers={
-            "Content-Disposition": "inline"
-        }
+            "Content-Disposition": "inline",
+        },
     )
 
 
@@ -1408,7 +1515,7 @@ async def upload_video(
             detail=(
                 "Unsupported file type. "
                 "Upload a traffic photo or video."
-            )
+            ),
         )
 
     # -----------------------------------------------------
@@ -1419,7 +1526,7 @@ async def upload_video(
 
         raise HTTPException(
             status_code=400,
-            detail="Please select a location method."
+            detail="Please select a location method.",
         )
 
     # -----------------------------------------------------
@@ -1431,14 +1538,14 @@ async def upload_video(
         if extension not in {
             ".jpg",
             ".jpeg",
-            ".png"
+            ".png",
         }:
 
             raise HTTPException(
                 status_code=400,
                 detail=(
                     "EXIF GPS is available only for photos."
-                )
+                ),
             )
 
     # -----------------------------------------------------
@@ -1453,7 +1560,7 @@ async def upload_video(
                 status_code=400,
                 detail=(
                     "Please provide an analysis location."
-                )
+                ),
             )
 
     # -----------------------------------------------------
@@ -1466,7 +1573,7 @@ async def upload_video(
 
     with open(
         file_path,
-        "wb"
+        "wb",
     ) as buffer:
 
         while True:
@@ -1487,7 +1594,7 @@ async def upload_video(
     if extension in {
         ".jpg",
         ".jpeg",
-        ".png"
+        ".png",
     }:
 
         result = process_image(
@@ -1513,7 +1620,7 @@ async def upload_video(
                 "Please upload an image or video "
                 "containing cars, motorcycles, buses, "
                 "or trucks."
-            )
+            ),
         )
 
     # -----------------------------------------------------
@@ -1524,7 +1631,7 @@ async def upload_video(
 
         if not result.get(
             "has_exif_gps",
-            False
+            False,
         ):
 
             raise HTTPException(
@@ -1533,7 +1640,7 @@ async def upload_video(
                     "No GPS information was found in "
                     "this photo. Please choose Enter "
                     "Manually or Use Current Location."
-                )
+                ),
             )
 
         latitude = result.get(
@@ -1554,12 +1661,12 @@ async def upload_video(
                 detail=(
                     "EXIF GPS coordinates "
                     "could not be read."
-                )
+                ),
             )
 
         readable_location = reverse_geocode(
             latitude,
-            longitude
+            longitude,
         )
 
         if readable_location:
@@ -1589,12 +1696,12 @@ async def upload_video(
                 detail=(
                     "Current location coordinates "
                     "are missing."
-                )
+                ),
             )
 
         readable_location = reverse_geocode(
             latitude,
-            longitude
+            longitude,
         )
 
         if readable_location:

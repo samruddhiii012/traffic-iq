@@ -2,7 +2,7 @@ fastapi
 uvicorn[standard]
 python-multipart
 PyJWT
-passlib[bcrypt]
+bcrypt
 ultralytics
 opencv-python-headless
 Pillow
