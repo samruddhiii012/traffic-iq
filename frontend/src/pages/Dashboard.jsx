@@ -557,8 +557,8 @@ const trafficAlert = getTrafficAlert();
 
                             <div
                                 className={`congestion ${
-                                    nearbyTraffic.congestion?
-                                        .toLowerCase()
+                                    nearbyTraffic.congestion?.toLowerCase() || ""
+                                
                                 }`}
                             >
 
@@ -849,8 +849,7 @@ const trafficAlert = getTrafficAlert();
 
                         <div
                             className={`congestion ${
-                                traffic.congestion?
-                                    .toLowerCase()
+                                traffic.congestion?.toLowerCase() || ""
                             }`}
                         >
 
