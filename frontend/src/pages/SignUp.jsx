@@ -38,7 +38,7 @@ function SignUp() {
 
         try {
             const response = await fetch(
-                "http://127.0.0.1:8000/signup",
+                "https://traffic-iq-production.up.railway.app/signup",
                 {
                     method: "POST",
                     headers: {

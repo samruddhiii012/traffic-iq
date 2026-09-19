@@ -88,7 +88,7 @@ function LiveMonitoring() {
                 setLongitude(lon);
 
                 fetch(
-                    `http://127.0.0.1:8000/reverse-geocode?latitude=${lat}&longitude=${lon}`
+                    `https://traffic-iq-production.up.railway.app/reverse-geocode?latitude=${lat}&longitude=${lon}`
                 )
                     .then((response) => {
                         
@@ -191,7 +191,7 @@ function LiveMonitoring() {
 
         try {
             const response = await fetch(
-                "http://127.0.0.1:8000/upload-video",
+                "https://traffic-iq-production.up.railway.app/upload-video",
                 {
                     method: "POST",
                     headers: {
@@ -235,7 +235,7 @@ function LiveMonitoring() {
 
             if (data.output_url) {
                 setProcessedUrl(
-                    `http://127.0.0.1:8000${data.output_url}`
+                    `https://traffic-iq-production.up.railway.app${data.output_url}`
                 );
             }
 

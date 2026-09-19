@@ -20,7 +20,7 @@ function Analytics() {
 
     useEffect(() => {
         const fetchHistory = () => {
-            fetch("http://127.0.0.1:8000/traffic/history")
+            fetch("https://traffic-iq-production.up.railway.app/traffic/history")
                 .then((response) => {
                     if (!response.ok) {
                         throw new Error("Failed to fetch history");

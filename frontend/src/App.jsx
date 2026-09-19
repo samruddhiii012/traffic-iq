@@ -67,7 +67,7 @@ function AppLayout() {
             try {
 
                 const response = await fetch(
-                    "http://127.0.0.1:8000/"
+                    "https://traffic-iq-production.up.railway.app/"
                 );
 
                 setSystemOnline(response.ok);

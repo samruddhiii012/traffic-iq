@@ -48,7 +48,7 @@ function Dashboard() {
             try {
 
                 const response = await fetch(
-                    "http://127.0.0.1:8000/traffic"
+                    "https://traffic-iq-production.up.railway.app/traffic"
                 );
 
                 if (!response.ok) {
@@ -108,7 +108,7 @@ function Dashboard() {
             try {
 
                 const response = await fetch(
-                    "http://127.0.0.1:8000/traffic/history"
+                    "https://traffic-iq-production.up.railway.app/traffic/history"
                 );
 
                 if (!response.ok) {
@@ -207,7 +207,7 @@ function Dashboard() {
                 try {
 
                     const response = await fetch(
-                        `http://127.0.0.1:8000/traffic/near-me?latitude=${latitude}&longitude=${longitude}`
+                        `https://traffic-iq-production.up.railway.app/traffic/near-me?latitude=${latitude}&longitude=${longitude}`
                     );
 
 

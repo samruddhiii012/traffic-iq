@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = "https://traffic-iq-production.up.railway.app";
 
 const categories = [
     "Heavy Traffic",
