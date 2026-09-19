@@ -743,7 +743,7 @@ function LiveMonitoring() {
                                 </span>
 
                                 <strong
-                                    className={`history-status ${traffic.congestion?.toLowerCase()}`}
+                                    className={`history-status ${traffic.congestion?.toLowerCase() || ""}`}
                                 >
                                     {traffic.congestion}
                                 </strong>

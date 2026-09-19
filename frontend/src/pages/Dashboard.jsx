@@ -862,7 +862,7 @@ const trafficAlert = getTrafficAlert();
 
                             Current traffic congestion is{" "}
 
-                            {traffic.congestion?.toLowerCase()}.
+                            {traffic.congestion?.toLowerCase() || "unknown"}.
 
                         </p>
 
