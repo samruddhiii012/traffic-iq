@@ -47,7 +47,6 @@ app = FastAPI(title="TrafficIQ API")
 # =========================================================
 # CORS
 # =========================================================
-# Allows frontend requests from Vercel and local development.
 
 app.add_middleware(
     CORSMiddleware,
@@ -70,91 +69,12 @@ def get_db_connection():
         DATABASE_NAME,
         timeout=30,
     )
-    connection.execute("PRAGMA foreign_keys = ON")
+
+    connection.execute(
+        "PRAGMA foreign_keys = ON"
+    )
+
     return connection
-
-
-# =========================================================
-# JWT SETTINGS
-# =========================================================
-
-JWT_SECRET_KEY = "trafficiq-super-secret-key-change-later"
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_MINUTES = 21600
-
-
-# =========================================================
-# AUTHENTICATION
-# =========================================================
-
-security = HTTPBearer()
-
-
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-):
-    token = credentials.credentials
-
-    try:
-        payload = jwt.decode(
-            token,
-            JWT_SECRET_KEY,
-            algorithms=[JWT_ALGORITHM],
-        )
-
-        user_id = payload.get("sub")
-        email = payload.get("email")
-        name = payload.get("name")
-
-        if not user_id or not email:
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid authentication token.",
-            )
-
-        return {
-            "id": int(user_id),
-            "email": email,
-            "name": name,
-        }
-
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication token has expired.",
-        )
-
-    except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid authentication token.",
-        )
-
-
-# =========================================================
-# HOME
-# =========================================================
-
-@app.get("/")
-def home():
-    return {
-        "project": "TrafficIQ",
-        "status": "Backend is running.",
-    }
-
-
-# =========================================================
-# AUTH TEST
-# =========================================================
-
-@app.get("/auth/me")
-def auth_me(
-    current_user: dict = Depends(get_current_user),
-):
-    return {
-        "message": "Authentication successful.",
-        "user": current_user,
-    }
 
 
 # =========================================================
@@ -162,6 +82,7 @@ def auth_me(
 # =========================================================
 
 def create_users_table():
+
     connection = get_db_connection()
     cursor = connection.cursor()
 
@@ -179,7 +100,58 @@ def create_users_table():
     connection.close()
 
 
-create_users_table()
+# =========================================================
+# TRAFFIC DATA TABLE
+# =========================================================
+
+def create_traffic_data_table():
+
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS traffic_data (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            cars INTEGER NOT NULL DEFAULT 0,
+            motorcycles INTEGER NOT NULL DEFAULT 0,
+            buses INTEGER NOT NULL DEFAULT 0,
+            trucks INTEGER NOT NULL DEFAULT 0,
+            total_vehicles INTEGER NOT NULL DEFAULT 0,
+            average_vehicles REAL NOT NULL DEFAULT 0,
+            peak_vehicles INTEGER NOT NULL DEFAULT 0,
+            congestion TEXT NOT NULL DEFAULT 'LOW',
+            location TEXT,
+            location_source TEXT,
+            latitude REAL,
+            longitude REAL,
+            user_id INTEGER
+        )
+    """)
+
+    # -----------------------------------------------------
+    # Existing database migration:
+    # Add user_id if an older traffic_data table exists.
+    # -----------------------------------------------------
+
+    cursor.execute(
+        "PRAGMA table_info(traffic_data)"
+    )
+
+    columns = {
+        row[1]
+        for row in cursor.fetchall()
+    }
+
+    if "user_id" not in columns:
+
+        cursor.execute("""
+            ALTER TABLE traffic_data
+            ADD COLUMN user_id INTEGER
+        """)
+
+    connection.commit()
+    connection.close()
 
 
 # =========================================================
@@ -243,7 +215,111 @@ def create_community_tables():
     connection.close()
 
 
+# =========================================================
+# INITIALIZE DATABASE TABLES
+# =========================================================
+
+create_users_table()
+create_traffic_data_table()
 create_community_tables()
+
+
+# =========================================================
+# JWT SETTINGS
+# =========================================================
+
+JWT_SECRET_KEY = (
+    "trafficiq-super-secret-key-change-later"
+)
+
+JWT_ALGORITHM = "HS256"
+
+JWT_EXPIRATION_MINUTES = 21600
+
+
+# =========================================================
+# AUTHENTICATION
+# =========================================================
+
+security = HTTPBearer()
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(
+        security
+    )
+):
+
+    token = credentials.credentials
+
+    try:
+
+        payload = jwt.decode(
+            token,
+            JWT_SECRET_KEY,
+            algorithms=[JWT_ALGORITHM],
+        )
+
+        user_id = payload.get("sub")
+        email = payload.get("email")
+        name = payload.get("name")
+
+        if not user_id or not email:
+
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid authentication token.",
+            )
+
+        return {
+            "id": int(user_id),
+            "email": email,
+            "name": name,
+        }
+
+    except jwt.ExpiredSignatureError:
+
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication token has expired.",
+        )
+
+    except jwt.InvalidTokenError:
+
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid authentication token.",
+        )
+
+
+# =========================================================
+# HOME
+# =========================================================
+
+@app.get("/")
+def home():
+
+    return {
+        "project": "TrafficIQ",
+        "status": "Backend is running.",
+    }
+
+
+# =========================================================
+# AUTH TEST
+# =========================================================
+
+@app.get("/auth/me")
+def auth_me(
+    current_user: dict = Depends(
+        get_current_user
+    ),
+):
+
+    return {
+        "message": "Authentication successful.",
+        "user": current_user,
+    }
 
 
 # =========================================================
@@ -251,6 +327,7 @@ create_community_tables()
 # =========================================================
 
 class SignupRequest(BaseModel):
+
     name: str
     email: str
     password: str
@@ -261,7 +338,9 @@ class SignupRequest(BaseModel):
 # =========================================================
 
 @app.post("/signup")
-def signup(user: SignupRequest):
+def signup(
+    user: SignupRequest
+):
 
     name = user.name.strip()
     email = user.email.strip().lower()
@@ -272,30 +351,43 @@ def signup(user: SignupRequest):
     # -----------------------------------------------------
 
     if not name:
+
         raise HTTPException(
             status_code=400,
             detail="Name is required.",
         )
 
     if not email:
+
         raise HTTPException(
             status_code=400,
             detail="Email is required.",
         )
 
     if len(password) < 6:
+
         raise HTTPException(
             status_code=400,
-            detail="Password must be at least 6 characters.",
+            detail=(
+                "Password must be at least 6 characters."
+            ),
         )
 
-    # BCrypt supports passwords up to 72 bytes.
-    password_bytes = password.encode("utf-8")
+    # -----------------------------------------------------
+    # BCRYPT PASSWORD LIMIT
+    # -----------------------------------------------------
+
+    password_bytes = password.encode(
+        "utf-8"
+    )
 
     if len(password_bytes) > 72:
+
         raise HTTPException(
             status_code=400,
-            detail="Password must be 72 bytes or fewer.",
+            detail=(
+                "Password must be 72 bytes or fewer."
+            ),
         )
 
     # -----------------------------------------------------
@@ -319,19 +411,27 @@ def signup(user: SignupRequest):
         existing_user = cursor.fetchone()
 
         if existing_user:
+
             raise HTTPException(
                 status_code=400,
-                detail="An account with this email already exists.",
+                detail=(
+                    "An account with this email "
+                    "already exists."
+                ),
             )
 
         # -------------------------------------------------
-        # HASH PASSWORD USING BCRYPT
+        # HASH PASSWORD
         # -------------------------------------------------
 
         password_hash = bcrypt.hashpw(
             password_bytes,
             bcrypt.gensalt(),
         ).decode("utf-8")
+
+        # -------------------------------------------------
+        # CREATE USER
+        # -------------------------------------------------
 
         cursor.execute(
             """
@@ -355,7 +455,9 @@ def signup(user: SignupRequest):
         connection.commit()
 
         return {
-            "message": "Account created successfully.",
+            "message": (
+                "Account created successfully."
+            ),
             "user": {
                 "id": user_id,
                 "name": name,
@@ -364,28 +466,40 @@ def signup(user: SignupRequest):
         }
 
     except HTTPException:
+
         connection.rollback()
         raise
 
     except sqlite3.IntegrityError:
+
         connection.rollback()
 
         raise HTTPException(
             status_code=400,
-            detail="An account with this email already exists.",
+            detail=(
+                "An account with this email "
+                "already exists."
+            ),
         )
 
     except Exception as error:
+
         connection.rollback()
 
-        print("Signup error:", error)
+        print(
+            "Signup error:",
+            error,
+        )
 
         raise HTTPException(
             status_code=500,
-            detail="Unable to create account.",
+            detail=(
+                "Unable to create account."
+            ),
         )
 
     finally:
+
         connection.close()
 
 
@@ -394,6 +508,7 @@ def signup(user: SignupRequest):
 # =========================================================
 
 class LoginRequest(BaseModel):
+
     email: str
     password: str
 
@@ -403,7 +518,9 @@ class LoginRequest(BaseModel):
 # =========================================================
 
 @app.post("/login")
-def login(user: LoginRequest):
+def login(
+    user: LoginRequest
+):
 
     email = user.email.strip().lower()
     password = user.password
@@ -413,27 +530,34 @@ def login(user: LoginRequest):
     # -----------------------------------------------------
 
     if not email:
+
         raise HTTPException(
             status_code=400,
             detail="Email is required.",
         )
 
     if not password:
+
         raise HTTPException(
             status_code=400,
             detail="Password is required.",
         )
 
-    password_bytes = password.encode("utf-8")
+    password_bytes = password.encode(
+        "utf-8"
+    )
 
     if len(password_bytes) > 72:
+
         raise HTTPException(
             status_code=400,
-            detail="Password must be 72 bytes or fewer.",
+            detail=(
+                "Password must be 72 bytes or fewer."
+            ),
         )
 
     # -----------------------------------------------------
-    # GET USER
+    # FIND USER
     # -----------------------------------------------------
 
     connection = get_db_connection()
@@ -454,9 +578,11 @@ def login(user: LoginRequest):
         db_user = cursor.fetchone()
 
     finally:
+
         connection.close()
 
     if db_user is None:
+
         raise HTTPException(
             status_code=401,
             detail="Invalid email or password.",
@@ -477,22 +603,29 @@ def login(user: LoginRequest):
 
     except Exception as error:
 
-        print("Password verification error:", error)
+        print(
+            "Password verification error:",
+            error,
+        )
+
         password_valid = False
 
     if not password_valid:
+
         raise HTTPException(
             status_code=401,
             detail="Invalid email or password.",
         )
 
-    # =====================================================
-    # CREATE JWT TOKEN
-    # =====================================================
+    # -----------------------------------------------------
+    # CREATE JWT
+    # -----------------------------------------------------
 
     token_expiration = (
         datetime.now(timezone.utc)
-        + timedelta(minutes=JWT_EXPIRATION_MINUTES)
+        + timedelta(
+            minutes=JWT_EXPIRATION_MINUTES
+        )
     )
 
     token_payload = {
@@ -525,25 +658,32 @@ def login(user: LoginRequest):
 # =========================================================
 
 class TrafficReportRequest(BaseModel):
+
     category: str
+
     description: str = Field(
         min_length=5,
         max_length=500,
     )
+
     location: str = Field(
         min_length=2,
         max_length=200,
     )
+
     latitude: float | None = None
     longitude: float | None = None
+
     suggested_route: str | None = Field(
         default=None,
         max_length=300,
     )
+
     severity: str = "MEDIUM"
 
 
 class TrafficCommentRequest(BaseModel):
+
     comment: str = Field(
         min_length=1,
         max_length=300,
@@ -648,19 +788,23 @@ def get_community_reports():
 @app.post("/community/reports")
 def create_community_report(
     report: TrafficReportRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(
+        get_current_user
+    ),
 ):
 
     category = report.category.strip()
     severity = report.severity.strip().upper()
 
     if category not in ALLOWED_REPORT_CATEGORIES:
+
         raise HTTPException(
             status_code=400,
             detail="Invalid traffic report category.",
         )
 
     if severity not in ALLOWED_SEVERITY:
+
         raise HTTPException(
             status_code=400,
             detail="Invalid report severity.",
@@ -706,7 +850,9 @@ def create_community_report(
     connection.close()
 
     return {
-        "message": "Traffic report created successfully.",
+        "message": (
+            "Traffic report created successfully."
+        ),
         "report_id": report_id,
     }
 
@@ -715,10 +861,14 @@ def create_community_report(
 # COMMUNITY - CONFIRM REPORT
 # =========================================================
 
-@app.post("/community/reports/{report_id}/confirm")
+@app.post(
+    "/community/reports/{report_id}/confirm"
+)
 def confirm_report(
     report_id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(
+        get_current_user
+    ),
 ):
 
     connection = get_db_connection()
@@ -779,8 +929,12 @@ def confirm_report(
 # COMMUNITY - GET COMMENTS
 # =========================================================
 
-@app.get("/community/reports/{report_id}/comments")
-def get_report_comments(report_id: int):
+@app.get(
+    "/community/reports/{report_id}/comments"
+)
+def get_report_comments(
+    report_id: int
+):
 
     connection = get_db_connection()
     cursor = connection.cursor()
@@ -823,14 +977,18 @@ def get_report_comments(report_id: int):
 
 
 # =========================================================
-# COMMUNITY - ADD COMMENT / TRAFFIC TALK
+# COMMUNITY - ADD COMMENT
 # =========================================================
 
-@app.post("/community/reports/{report_id}/comments")
+@app.post(
+    "/community/reports/{report_id}/comments"
+)
 def add_report_comment(
     report_id: int,
     comment_data: TrafficCommentRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(
+        get_current_user
+    ),
 ):
 
     connection = get_db_connection()
@@ -886,10 +1044,14 @@ def add_report_comment(
 # COMMUNITY - RESOLVE REPORT
 # =========================================================
 
-@app.post("/community/reports/{report_id}/resolve")
+@app.post(
+    "/community/reports/{report_id}/resolve"
+)
 def resolve_report(
     report_id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(
+        get_current_user
+    ),
 ):
 
     connection = get_db_connection()
@@ -934,7 +1096,9 @@ def resolve_report(
     connection.close()
 
     return {
-        "message": "Traffic report marked as resolved.",
+        "message": (
+            "Traffic report marked as resolved."
+        ),
     }
 
 
@@ -1006,7 +1170,8 @@ def reverse_geocode(
         ]
 
         location_name = ", ".join(
-            part for part in parts
+            part
+            for part in parts
             if part
         )
 
@@ -1049,7 +1214,9 @@ def traffic_data():
     if data is None:
 
         return {
-            "message": "No traffic data available"
+            "message": (
+                "No traffic data available"
+            )
         }
 
     return {
@@ -1063,15 +1230,25 @@ def traffic_data():
         "average_vehicles": data[7],
         "peak_vehicles": data[8],
         "congestion": data[9],
-        "location": data[10] if len(data) > 10 else None,
+        "location": (
+            data[10]
+            if len(data) > 10
+            else None
+        ),
         "location_source": (
-            data[11] if len(data) > 11 else None
+            data[11]
+            if len(data) > 11
+            else None
         ),
         "latitude": (
-            data[12] if len(data) > 12 else None
+            data[12]
+            if len(data) > 12
+            else None
         ),
         "longitude": (
-            data[13] if len(data) > 13 else None
+            data[13]
+            if len(data) > 13
+            else None
         ),
     }
 
@@ -1113,16 +1290,24 @@ def traffic_history():
             "peak_vehicles": data[8],
             "congestion": data[9],
             "location": (
-                data[10] if len(data) > 10 else None
+                data[10]
+                if len(data) > 10
+                else None
             ),
             "location_source": (
-                data[11] if len(data) > 11 else None
+                data[11]
+                if len(data) > 11
+                else None
             ),
             "latitude": (
-                data[12] if len(data) > 12 else None
+                data[12]
+                if len(data) > 12
+                else None
             ),
             "longitude": (
-                data[13] if len(data) > 13 else None
+                data[13]
+                if len(data) > 13
+                else None
             ),
         })
 
@@ -1138,7 +1323,9 @@ def traffic_history():
 
 @app.get("/my-history")
 def my_history(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(
+        get_current_user
+    ),
 ):
 
     connection = get_db_connection()
@@ -1244,7 +1431,8 @@ def traffic_near_me(
         return {
             "found": False,
             "message": (
-                "No location-based traffic data available."
+                "No location-based traffic "
+                "data available."
             ),
         }
 
@@ -1306,7 +1494,9 @@ def traffic_near_me(
 
         return {
             "found": False,
-            "message": "No nearby traffic data found.",
+            "message": (
+                "No nearby traffic data found."
+            ),
         }
 
     return {
@@ -1353,7 +1543,9 @@ def reverse_geocode_endpoint(
 
         raise HTTPException(
             status_code=404,
-            detail="Unable to determine location name.",
+            detail=(
+                "Unable to determine location name."
+            ),
         )
 
     return {
@@ -1378,7 +1570,9 @@ def traffic_video():
 
         raise HTTPException(
             status_code=404,
-            detail="Default traffic video not found.",
+            detail=(
+                "Default traffic video not found."
+            ),
         )
 
     return FileResponse(
@@ -1395,7 +1589,9 @@ def traffic_video():
 # =========================================================
 
 @app.get("/processed/{file_path:path}")
-def processed_media(file_path: str):
+def processed_media(
+    file_path: str
+):
 
     requested_path = (
         PROCESSED_DIR / file_path
@@ -1418,7 +1614,9 @@ def processed_media(file_path: str):
 
         raise HTTPException(
             status_code=404,
-            detail="Processed media not found.",
+            detail=(
+                "Processed media not found."
+            ),
         )
 
     extension = (
@@ -1461,7 +1659,9 @@ def processed_media(file_path: str):
 
         raise HTTPException(
             status_code=400,
-            detail="Unsupported processed media.",
+            detail=(
+                "Unsupported processed media."
+            ),
         )
 
     return FileResponse(
@@ -1484,7 +1684,9 @@ async def upload_video(
     location_source: str = Form(""),
     latitude: float | None = Form(None),
     longitude: float | None = Form(None),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(
+        get_current_user
+    ),
 ):
 
     # -----------------------------------------------------
@@ -1526,11 +1728,13 @@ async def upload_video(
 
         raise HTTPException(
             status_code=400,
-            detail="Please select a location method.",
+            detail=(
+                "Please select a location method."
+            ),
         )
 
     # -----------------------------------------------------
-    # EXIF CASE
+    # EXIF GPS
     # -----------------------------------------------------
 
     if location_source == "EXIF GPS":
@@ -1544,7 +1748,8 @@ async def upload_video(
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "EXIF GPS is available only for photos."
+                    "EXIF GPS is available only "
+                    "for photos."
                 ),
             )
 
@@ -1559,12 +1764,13 @@ async def upload_video(
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "Please provide an analysis location."
+                    "Please provide an "
+                    "analysis location."
                 ),
             )
 
     # -----------------------------------------------------
-    # SAVE UPLOADED FILE
+    # SAVE UPLOAD
     # -----------------------------------------------------
 
     file_path = (
@@ -1588,7 +1794,7 @@ async def upload_video(
             buffer.write(chunk)
 
     # -----------------------------------------------------
-    # PROCESS IMAGE OR VIDEO
+    # PROCESS
     # -----------------------------------------------------
 
     if extension in {
@@ -1608,7 +1814,7 @@ async def upload_video(
         )
 
     # -----------------------------------------------------
-    # NO VEHICLES FOUND
+    # NO VEHICLES
     # -----------------------------------------------------
 
     if result is None:
@@ -1618,8 +1824,8 @@ async def upload_video(
             detail=(
                 "No traffic vehicles detected. "
                 "Please upload an image or video "
-                "containing cars, motorcycles, buses, "
-                "or trucks."
+                "containing cars, motorcycles, "
+                "buses, or trucks."
             ),
         )
 
@@ -1637,9 +1843,10 @@ async def upload_video(
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "No GPS information was found in "
-                    "this photo. Please choose Enter "
-                    "Manually or Use Current Location."
+                    "No GPS information was found "
+                    "in this photo. Please choose "
+                    "Enter Manually or Use Current "
+                    "Location."
                 ),
             )
 
@@ -1717,7 +1924,7 @@ async def upload_video(
         location = location.strip()
 
     # -----------------------------------------------------
-    # SAVE RESULT TO DATABASE
+    # SAVE TRAFFIC RESULT
     # -----------------------------------------------------
 
     connection = get_db_connection()
@@ -1764,7 +1971,7 @@ async def upload_video(
     connection.close()
 
     # -----------------------------------------------------
-    # PROCESSED MEDIA URL
+    # OUTPUT URL
     # -----------------------------------------------------
 
     relative_path = (
