@@ -798,7 +798,7 @@ def get_community_reports():
                 WHERE c.report_id = r.id
             ) AS comments
         FROM traffic_reports r
-        JOIN users u
+        LEFT JOIN users u
             ON u.id = r.user_id
         ORDER BY r.id DESC
         LIMIT 50
@@ -822,7 +822,7 @@ def get_community_reports():
             "severity": data[7],
             "status": data[8],
             "created_at": data[9],
-            "reported_by": data[10],
+            "reported_by": data[10] or "TrafficIQ User",
             "confirmations": data[11],
             "comments": data[12],
         })
