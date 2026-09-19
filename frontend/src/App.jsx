@@ -18,7 +18,6 @@ import Login from "./pages/Login";
 import SignUp from "./pages/SignUp";
 import Community from "./pages/Community";
 
-const [mobilePreview, setMobilePreview] = useState(false);
 
 import "./App.css";
 
@@ -125,13 +124,6 @@ function AppLayout() {
         <div className="app-layout">
 
             <Sidebar />
-
-            <button
-                onClick={() => setMobilePreview((prev) => !prev)}
-                className="preview-toggle"
-            >
-                {mobilePreview ? "🖥️ Web View" : "📱 Mobile Preview"}
-            </button>
 
 
             <main className="page-content">
