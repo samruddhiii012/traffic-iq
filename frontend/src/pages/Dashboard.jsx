@@ -695,7 +695,7 @@ const trafficAlert = getTrafficAlert();
             </div>
 
             <div
-                className={`traffic-score-badge ${trafficAlert.type.toLowerCase()}`}
+                className={`traffic-score-badge ${trafficAlert.type?.toLowerCase()}`}
             >
                 {traffic.congestion}
             </div>
@@ -704,7 +704,7 @@ const trafficAlert = getTrafficAlert();
         <div className="traffic-score-main">
 
             <div
-                className={`traffic-score-circle ${trafficAlert.type.toLowerCase()}`}
+                className={`traffic-score-circle ${trafficAlert.type?.toLowerCase()}`}
             >
                 <span className="traffic-score-number">
                     {trafficScore}
@@ -737,7 +737,7 @@ const trafficAlert = getTrafficAlert();
 
 
     {/* TRAFFIC ALERT */}
-    <div className={`traffic-alert-card ${trafficAlert.type.toLowerCase()}`}>
+    <div className={`traffic-alert-card ${trafficAlert.type?.toLowerCase()}`}>
 
         <div className="traffic-alert-icon">
             {trafficAlert.type === "HIGH"
@@ -863,7 +863,7 @@ const trafficAlert = getTrafficAlert();
 
                             Current traffic congestion is{" "}
 
-                            {traffic.congestion.toLowerCase()}.
+                            {traffic.congestion?.toLowerCase()}.
 
                         </p>
 
