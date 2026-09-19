@@ -17,7 +17,7 @@ from math import radians, sin, cos, sqrt, atan2
 from pydantic import BaseModel, Field
 from passlib.hash import bcrypt
 
-from backend.traffic_processor import (
+from traffic_processor import (
     UPLOAD_DIR,
     PROCESSED_DIR,
     process_image,
