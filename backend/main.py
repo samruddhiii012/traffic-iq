@@ -62,9 +62,9 @@ app.add_middleware(
 # DATABASE
 # =========================================================
 
-DATABASE_NAME = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "traffic.db"
+DATABASE_NAME = os.getenv(
+    "DATABASE_PATH",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "traffic.db")
 )
 
 
