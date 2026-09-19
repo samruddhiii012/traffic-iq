@@ -20,8 +20,13 @@ function Community() {
     const [reports, setReports] = useState([]);
     const [statusFilter, setStatusFilter] = useState("ALL");
     const [categoryFilter, setCategoryFilter] = useState("ALL");
+
     const [loading, setLoading] = useState(true);
+    const [loadingReports, setLoadingReports] = useState(false);
+
     const [message, setMessage] = useState("");
+    const [errorMessage, setErrorMessage] = useState("");
+
     const [showReportForm, setShowReportForm] = useState(false);
 
     const [form, setForm] = useState({
@@ -36,6 +41,18 @@ function Community() {
 
     const token = localStorage.getItem("trafficIQToken");
 
+    const savedUser = localStorage.getItem("trafficIQUser");
+
+    let currentUser = null;
+
+    try {
+        currentUser = savedUser
+            ? JSON.parse(savedUser)
+            : null;
+    } catch {
+        currentUser = null;
+    }
+
     const isLoggedIn = !!token;
 
 
@@ -43,12 +60,23 @@ function Community() {
     // LOAD COMMUNITY REPORTS
     // =====================================================
 
-    const loadReports = async () => {
+    const loadReports = async (showLoader = false) => {
         try {
-            setLoading(true);
+            if (showLoader) {
+                setLoading(true);
+            }
+
+            setErrorMessage("");
 
             const response = await fetch(
-                `${API_BASE}/community/reports`
+                `${API_BASE}/community/reports`,
+                {
+                    method: "GET",
+                    headers: {
+                        Accept: "application/json",
+                    },
+                    cache: "no-store",
+                }
             );
 
             const data = await response.json();
@@ -60,19 +88,45 @@ function Community() {
                 );
             }
 
-            setReports(data.reports || []);
+            setReports(
+                Array.isArray(data.reports)
+                    ? data.reports
+                    : []
+            );
 
         } catch (error) {
-            setMessage(error.message);
+            console.error(
+                "Community reports error:",
+                error
+            );
+
+            setErrorMessage(
+                error.message ||
+                "Unable to load community reports."
+            );
 
         } finally {
-            setLoading(false);
+            if (showLoader) {
+                setLoading(false);
+            }
         }
     };
 
 
+    // =====================================================
+    // INITIAL LOAD + AUTO REFRESH
+    // =====================================================
+
     useEffect(() => {
-        loadReports();
+        loadReports(true);
+
+        const interval = setInterval(() => {
+            loadReports(false);
+        }, 15000);
+
+        return () => {
+            clearInterval(interval);
+        };
     }, []);
 
 
@@ -81,13 +135,15 @@ function Community() {
     // =====================================================
 
     const handleFormChange = (e) => {
-
         const { name, value } = e.target;
 
         setForm((prev) => ({
             ...prev,
             [name]: value,
         }));
+
+        setMessage("");
+        setErrorMessage("");
     };
 
 
@@ -96,7 +152,6 @@ function Community() {
     // =====================================================
 
     const createReport = async (e) => {
-
         e.preventDefault();
 
         if (!isLoggedIn) {
@@ -117,24 +172,25 @@ function Community() {
         }
 
         try {
-
             setMessage("");
+            setErrorMessage("");
+            setLoadingReports(true);
 
             const response = await fetch(
                 `${API_BASE}/community/reports`,
                 {
                     method: "POST",
-
                     headers: {
                         Accept: "application/json",
                         "Content-Type": "application/json",
                         Authorization: `Bearer ${token}`,
                     },
-
                     body: JSON.stringify({
                         category: form.category,
-                        description: form.description,
-                        location: form.location,
+                        description:
+                            form.description.trim(),
+                        location:
+                            form.location.trim(),
 
                         latitude: form.latitude
                             ? Number(form.latitude)
@@ -145,7 +201,8 @@ function Community() {
                             : null,
 
                         suggested_route:
-                            form.suggested_route,
+                            form.suggested_route.trim() ||
+                            null,
 
                         severity: form.severity,
                     }),
@@ -155,16 +212,60 @@ function Community() {
             const data = await response.json();
 
             if (!response.ok) {
-
                 throw new Error(
                     data.detail ||
                     "Failed to create report."
                 );
             }
 
+            // =================================================
+            // IMMEDIATELY SHOW NEW REPORT IN UI
+            // =================================================
+
+            const newReport = {
+                id: data.report_id,
+                category: form.category,
+                description:
+                    form.description.trim(),
+                location:
+                    form.location.trim(),
+
+                latitude: form.latitude
+                    ? Number(form.latitude)
+                    : null,
+
+                longitude: form.longitude
+                    ? Number(form.longitude)
+                    : null,
+
+                suggested_route:
+                    form.suggested_route.trim() ||
+                    null,
+
+                severity: form.severity,
+
+                status: "ACTIVE",
+
+                created_at: new Date().toLocaleString(),
+
+                reported_by:
+                    currentUser?.name ||
+                    "You",
+
+                confirmations: 0,
+                comments: 0,
+            };
+
+            setReports((prev) => [
+                newReport,
+                ...prev,
+            ]);
+
             setMessage(
                 "Traffic report created successfully."
             );
+
+            // Reset form
 
             setForm({
                 category: "Heavy Traffic",
@@ -178,11 +279,25 @@ function Community() {
 
             setShowReportForm(false);
 
-            await loadReports();
+            // =================================================
+            // REFRESH FROM BACKEND
+            // =================================================
+
+            await loadReports(false);
 
         } catch (error) {
+            console.error(
+                "Create report error:",
+                error
+            );
 
-            setMessage(error.message);
+            setErrorMessage(
+                error.message ||
+                "Unable to create report."
+            );
+
+        } finally {
+            setLoadingReports(false);
         }
     };
 
@@ -194,21 +309,20 @@ function Community() {
     const confirmReport = async (reportId) => {
 
         if (!isLoggedIn) {
-
             setMessage(
                 "Please login to confirm a traffic report."
             );
-
             return;
         }
 
         try {
+            setMessage("");
+            setErrorMessage("");
 
             const response = await fetch(
                 `${API_BASE}/community/reports/${reportId}/confirm`,
                 {
                     method: "POST",
-
                     headers: {
                         Accept: "application/json",
                         Authorization: `Bearer ${token}`,
@@ -219,36 +333,64 @@ function Community() {
             const data = await response.json();
 
             if (!response.ok) {
-
                 throw new Error(
                     data.detail ||
                     "Unable to confirm report."
                 );
             }
 
-            setMessage("Report confirmed.");
+            setMessage(
+                data.message ||
+                "Report confirmed."
+            );
 
-            await loadReports();
+            await loadReports(false);
 
         } catch (error) {
+            console.error(
+                "Confirm report error:",
+                error
+            );
 
-            setMessage(error.message);
+            setErrorMessage(
+                error.message ||
+                "Unable to confirm report."
+            );
         }
     };
 
 
-    const filteredReports = reports.filter((report) => {
-        const statusMatch =
-            statusFilter === "ALL" ||
-            (report.status || "").toUpperCase() === statusFilter;
+    // =====================================================
+    // FILTER REPORTS
+    // =====================================================
 
-        const categoryMatch =
-            categoryFilter === "ALL" ||
-            report.category === categoryFilter;
+    const filteredReports = reports.filter(
+        (report) => {
 
-        return statusMatch && categoryMatch;
-    });
+            const reportStatus = (
+                report.status ||
+                "ACTIVE"
+            ).toUpperCase();
 
+            const statusMatch =
+                statusFilter === "ALL" ||
+                reportStatus === statusFilter;
+
+            const categoryMatch =
+                categoryFilter === "ALL" ||
+                report.category === categoryFilter;
+
+            return (
+                statusMatch &&
+                categoryMatch
+            );
+        }
+    );
+
+
+    // =====================================================
+    // RENDER
+    // =====================================================
 
     return (
         <div
@@ -293,12 +435,11 @@ function Community() {
                         style={{
                             margin: 0,
                             color: "#475569",
-                            opacity: 1,
                             fontSize: "15px",
                         }}
                     >
-                        Real traffic updates shared and confirmed
-                        by TrafficIQ users.
+                        Real traffic updates shared and
+                        confirmed by TrafficIQ users.
                     </p>
 
                 </div>
@@ -351,7 +492,7 @@ function Community() {
 
 
             {/* =================================================
-                MESSAGE
+                SUCCESS MESSAGE
             ================================================= */}
 
             {message && (
@@ -361,12 +502,33 @@ function Community() {
                         padding: "12px 14px",
                         borderRadius: "10px",
                         marginBottom: "20px",
-                        background: "#e2e8f0",
-                        color: "#1e293b",
+                        background: "#dcfce7",
+                        color: "#166534",
                         fontSize: "14px",
                     }}
                 >
-                    {message}
+                    ✅ {message}
+                </div>
+            )}
+
+
+            {/* =================================================
+                ERROR MESSAGE
+            ================================================= */}
+
+            {errorMessage && (
+
+                <div
+                    style={{
+                        padding: "12px 14px",
+                        borderRadius: "10px",
+                        marginBottom: "20px",
+                        background: "#fee2e2",
+                        color: "#991b1b",
+                        fontSize: "14px",
+                    }}
+                >
+                    ❌ {errorMessage}
                 </div>
             )}
 
@@ -402,9 +564,7 @@ function Community() {
                     </h2>
 
 
-                    <form
-                        onSubmit={createReport}
-                    >
+                    <form onSubmit={createReport}>
 
                         <div
                             style={{
@@ -452,14 +612,9 @@ function Community() {
 
                                     {categories.map(
                                         (category) => (
-
                                             <option
-                                                key={
-                                                    category
-                                                }
-                                                value={
-                                                    category
-                                                }
+                                                key={category}
+                                                value={category}
                                             >
                                                 {category}
                                             </option>
@@ -508,18 +663,12 @@ function Community() {
 
                                     {severities.map(
                                         (severity) => (
-
                                             <option
-                                                key={
-                                                    severity
-                                                }
-                                                value={
-                                                    severity
-                                                }
+                                                key={severity}
+                                                value={severity}
                                             >
                                                 {severity}
                                             </option>
-
                                         )
                                     )}
 
@@ -532,8 +681,7 @@ function Community() {
 
                             <div
                                 style={{
-                                    gridColumn:
-                                        "1 / -1",
+                                    gridColumn: "1 / -1",
                                 }}
                             >
 
@@ -555,9 +703,7 @@ function Community() {
                                     onChange={
                                         handleFormChange
                                     }
-                                    placeholder={
-                                        "Example: Kharghar Station Road"
-                                    }
+                                    placeholder="Example: Kharghar Station Road"
                                     style={{
                                         width: "100%",
                                         padding: "11px",
@@ -579,8 +725,7 @@ function Community() {
 
                             <div
                                 style={{
-                                    gridColumn:
-                                        "1 / -1",
+                                    gridColumn: "1 / -1",
                                 }}
                             >
 
@@ -603,9 +748,7 @@ function Community() {
                                     onChange={
                                         handleFormChange
                                     }
-                                    placeholder={
-                                        "Describe the traffic situation..."
-                                    }
+                                    placeholder="Describe the traffic situation..."
                                     rows="4"
                                     style={{
                                         width: "100%",
@@ -619,8 +762,7 @@ function Community() {
                                         boxSizing:
                                             "border-box",
                                         resize: "vertical",
-                                        fontFamily:
-                                            "inherit",
+                                        fontFamily: "inherit",
                                     }}
                                 />
 
@@ -713,8 +855,7 @@ function Community() {
 
                             <div
                                 style={{
-                                    gridColumn:
-                                        "1 / -1",
+                                    gridColumn: "1 / -1",
                                 }}
                             >
 
@@ -738,9 +879,7 @@ function Community() {
                                     onChange={
                                         handleFormChange
                                     }
-                                    placeholder={
-                                        "Example: Try Central Park Road"
-                                    }
+                                    placeholder="Example: Try Central Park Road"
                                     style={{
                                         width: "100%",
                                         padding: "11px",
@@ -762,23 +901,96 @@ function Community() {
 
                         <button
                             type="submit"
+                            disabled={loadingReports}
                             style={{
                                 marginTop: "18px",
-                                padding:
-                                    "12px 20px",
+                                padding: "12px 20px",
                                 border: "none",
                                 borderRadius: "10px",
-                                cursor: "pointer",
+                                cursor: loadingReports
+                                    ? "not-allowed"
+                                    : "pointer",
                                 fontWeight: "600",
-                                background:
-                                    "#0f172a",
+                                background: "#0f172a",
                                 color: "#ffffff",
+                                opacity: loadingReports
+                                    ? 0.6
+                                    : 1,
                             }}
                         >
-                            Submit Traffic Report
+                            {loadingReports
+                                ? "Submitting..."
+                                : "Submit Traffic Report"}
                         </button>
 
                     </form>
+
+                </div>
+            )}
+
+
+            {/* =================================================
+                FILTERS
+            ================================================= */}
+
+            {!loading && reports.length > 0 && (
+
+                <div
+                    className="community-filter-bar"
+                    style={{
+                        marginBottom: "18px",
+                        display: "flex",
+                        gap: "10px",
+                        flexWrap: "wrap",
+                    }}
+                >
+
+                    <select
+                        value={statusFilter}
+                        onChange={(e) =>
+                            setStatusFilter(
+                                e.target.value
+                            )
+                        }
+                    >
+                        <option value="ALL">
+                            All Status
+                        </option>
+
+                        <option value="ACTIVE">
+                            Active
+                        </option>
+
+                        <option value="RESOLVED">
+                            Resolved
+                        </option>
+                    </select>
+
+
+                    <select
+                        value={categoryFilter}
+                        onChange={(e) =>
+                            setCategoryFilter(
+                                e.target.value
+                            )
+                        }
+                    >
+                        <option value="ALL">
+                            All Categories
+                        </option>
+
+                        {categories.map(
+                            (category) => (
+                                <option
+                                    key={category}
+                                    value={category}
+                                >
+                                    {category}
+                                </option>
+                            )
+                        )}
+
+                    </select>
 
                 </div>
             )}
@@ -797,6 +1009,47 @@ function Community() {
                     }}
                 >
                     Loading community reports...
+                </div>
+
+            ) : errorMessage &&
+              reports.length === 0 ? (
+
+                <div
+                    style={{
+                        padding: "30px",
+                        textAlign: "center",
+                        borderRadius: "16px",
+                        background: "#fff7ed",
+                        color: "#9a3412",
+                        border:
+                            "1px solid #fed7aa",
+                    }}
+                >
+                    <h3>
+                        Unable to load reports
+                    </h3>
+
+                    <p>
+                        {errorMessage}
+                    </p>
+
+                    <button
+                        type="button"
+                        onClick={() =>
+                            loadReports(true)
+                        }
+                        style={{
+                            marginTop: "10px",
+                            padding: "10px 16px",
+                            border: "none",
+                            borderRadius: "8px",
+                            background: "#0f172a",
+                            color: "#ffffff",
+                            cursor: "pointer",
+                        }}
+                    >
+                        Retry
+                    </button>
                 </div>
 
             ) : reports.length === 0 ? (
@@ -821,8 +1074,35 @@ function Community() {
                             color: "#64748b",
                         }}
                     >
-                        Be the first person to
-                        report a traffic situation.
+                        Be the first person to report
+                        a traffic situation.
+                    </p>
+                </div>
+
+            ) : filteredReports.length === 0 ? (
+
+                <div
+                    style={{
+                        padding: "40px 30px",
+                        textAlign: "center",
+                        borderRadius: "16px",
+                        background: "#ffffff",
+                        color: "#111827",
+                        border:
+                            "1px solid #e2e8f0",
+                    }}
+                >
+                    <h3>
+                        No matching traffic reports
+                    </h3>
+
+                    <p
+                        style={{
+                            color: "#64748b",
+                        }}
+                    >
+                        Try changing the status or
+                        category filter.
                     </p>
                 </div>
 
@@ -835,54 +1115,32 @@ function Community() {
                     }}
                 >
 
+                    {filteredReports.map(
+                        (report) => (
 
-                    <div className="community-filter-bar">
-                        <select
-                            value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
-                        >
-                            <option value="ALL">All Status</option>
-                            <option value="OPEN">Open</option>
-                            <option value="RESOLVED">Resolved</option>
-                        </select>
+                            <ReportCard
+                                key={report.id}
+                                report={report}
+                                token={token}
+                                isLoggedIn={
+                                    isLoggedIn
+                                }
+                                onConfirm={
+                                    confirmReport
+                                }
+                                onReload={
+                                    loadReports
+                                }
+                                setMessage={
+                                    setMessage
+                                }
+                                setErrorMessage={
+                                    setErrorMessage
+                                }
+                            />
 
-                        <select
-                            value={categoryFilter}
-                            onChange={(e) => setCategoryFilter(e.target.value)}
-                        >
-                            <option value="ALL">All Categories</option>
-                            <option value="Heavy Traffic">Heavy Traffic</option>
-                            <option value="Road Blocked">Road Blocked</option>
-                            <option value="Accident / Crash">Accident / Crash</option>
-                            <option value="Signal Issue">Signal Issue</option>
-                            <option value="Traffic Diversion">Traffic Diversion</option>
-                            <option value="Lane Closure">Lane Closure</option>
-                            <option value="Vehicle Breakdown">Vehicle Breakdown</option>
-                            <option value="Route Suggestion">Route Suggestion</option>
-                        </select>
-                    </div>
-
-                    {filteredReports.map((report) => (
-
-                        <ReportCard
-                            key={report.id}
-                            report={report}
-                            token={token}
-                            isLoggedIn={
-                                isLoggedIn
-                            }
-                            onConfirm={
-                                confirmReport
-                            }
-                            onReload={
-                                loadReports
-                            }
-                            setMessage={
-                                setMessage
-                            }
-                        />
-
-                    ))}
+                        )
+                    )}
 
                 </div>
             )}
@@ -890,7 +1148,6 @@ function Community() {
         </div>
     );
 }
-
 
 
 // =========================================================
@@ -904,6 +1161,7 @@ function ReportCard({
     onConfirm,
     onReload,
     setMessage,
+    setErrorMessage,
 }) {
 
     const [
@@ -936,9 +1194,17 @@ function ReportCard({
         try {
 
             setLoadingComments(true);
+            setErrorMessage("");
 
             const response = await fetch(
-                `${API_BASE}/community/reports/${report.id}/comments`
+                `${API_BASE}/community/reports/${report.id}/comments`,
+                {
+                    method: "GET",
+                    headers: {
+                        Accept: "application/json",
+                    },
+                    cache: "no-store",
+                }
             );
 
             const data =
@@ -958,8 +1224,14 @@ function ReportCard({
 
         } catch (error) {
 
-            setMessage(
-                error.message
+            console.error(
+                "Load comments error:",
+                error
+            );
+
+            setErrorMessage(
+                error.message ||
+                "Unable to load comments."
             );
 
         } finally {
@@ -1011,6 +1283,8 @@ function ReportCard({
 
         try {
 
+            setErrorMessage("");
+
             const response =
                 await fetch(
                     `${API_BASE}/community/reports/${report.id}/comments`,
@@ -1020,15 +1294,17 @@ function ReportCard({
                         headers: {
                             Accept:
                                 "application/json",
+
                             "Content-Type":
                                 "application/json",
+
                             Authorization:
                                 `Bearer ${token}`,
                         },
 
                         body: JSON.stringify({
                             comment:
-                                commentText,
+                                commentText.trim(),
                         }),
                     }
                 );
@@ -1052,12 +1328,18 @@ function ReportCard({
 
             await loadComments();
 
-            await onReload();
+            await onReload(false);
 
         } catch (error) {
 
-            setMessage(
-                error.message
+            console.error(
+                "Add comment error:",
+                error
+            );
+
+            setErrorMessage(
+                error.message ||
+                "Unable to add comment."
             );
         }
     };
@@ -1080,6 +1362,8 @@ function ReportCard({
 
         try {
 
+            setErrorMessage("");
+
             const response =
                 await fetch(
                     `${API_BASE}/community/reports/${report.id}/resolve`,
@@ -1089,6 +1373,7 @@ function ReportCard({
                         headers: {
                             Accept:
                                 "application/json",
+
                             Authorization:
                                 `Bearer ${token}`,
                         },
@@ -1110,26 +1395,38 @@ function ReportCard({
                 "Traffic report marked as resolved."
             );
 
-            await onReload();
+            await onReload(false);
 
         } catch (error) {
 
-            setMessage(
-                error.message
+            console.error(
+                "Resolve report error:",
+                error
+            );
+
+            setErrorMessage(
+                error.message ||
+                "Unable to resolve report."
             );
         }
     };
 
 
     // =====================================================
-    // BADGE COLORS
+    // BADGES
     // =====================================================
 
     const severity =
-        report.severity || "MEDIUM";
+        (
+            report.severity ||
+            "MEDIUM"
+        ).toUpperCase();
 
     const status =
-        report.status || "ACTIVE";
+        (
+            report.status ||
+            "ACTIVE"
+        ).toUpperCase();
 
 
     let severityBackground =
@@ -1148,6 +1445,7 @@ function ReportCard({
             "#b91c1c";
     }
 
+
     if (severity === "MEDIUM") {
 
         severityBackground =
@@ -1156,6 +1454,7 @@ function ReportCard({
         severityColor =
             "#92400e";
     }
+
 
     if (severity === "LOW") {
 
@@ -1178,23 +1477,32 @@ function ReportCard({
             : "#1d4ed8";
 
 
+    // =====================================================
+    // REPORT CARD
+    // =====================================================
+
     return (
 
         <div
             style={{
                 border:
                     "1px solid #e2e8f0",
+
                 borderRadius: "16px",
+
                 padding: "20px",
+
                 background: "#ffffff",
+
                 color: "#111827",
+
                 boxShadow:
                     "0 8px 30px rgba(15, 23, 42, 0.07)",
             }}
         >
 
             {/* =================================================
-                REPORT HEADER
+                HEADER
             ================================================= */}
 
             <div
@@ -1220,8 +1528,10 @@ function ReportCard({
                         }}
                     >
                         Reported by{" "}
+
                         <strong>
-                            {report.reported_by}
+                            {report.reported_by ||
+                                "TrafficIQ user"}
                         </strong>
                     </div>
 
@@ -1252,12 +1562,17 @@ function ReportCard({
                         style={{
                             padding:
                                 "6px 10px",
+
                             borderRadius:
                                 "999px",
+
                             fontSize: "12px",
+
                             fontWeight: "700",
+
                             background:
                                 severityBackground,
+
                             color:
                                 severityColor,
                         }}
@@ -1270,12 +1585,17 @@ function ReportCard({
                         style={{
                             padding:
                                 "6px 10px",
+
                             borderRadius:
                                 "999px",
+
                             fontSize: "12px",
+
                             fontWeight: "700",
+
                             background:
                                 statusBackground,
+
                             color:
                                 statusColor,
                         }}
@@ -1351,7 +1671,7 @@ function ReportCard({
 
 
             {/* =================================================
-                CREATED DATE
+                DATE
             ================================================= */}
 
             <div
@@ -1361,7 +1681,8 @@ function ReportCard({
                     color: "#64748b",
                 }}
             >
-                {report.created_at}
+                {report.created_at ||
+                    "Recently reported"}
             </div>
 
 
@@ -1391,20 +1712,27 @@ function ReportCard({
                         style={{
                             padding:
                                 "10px 14px",
+
                             borderRadius:
                                 "10px",
+
                             border:
                                 "1px solid #cbd5e1",
+
                             cursor:
                                 isLoggedIn
                                     ? "pointer"
                                     : "not-allowed",
+
                             background:
                                 "#f8fafc",
+
                             color:
                                 "#0f172a",
+
                             fontWeight:
                                 "600",
+
                             opacity:
                                 isLoggedIn
                                     ? 1
@@ -1412,7 +1740,7 @@ function ReportCard({
                         }}
                     >
                         ✅ Confirm (
-                        {report.confirmations}
+                        {report.confirmations || 0}
                         )
                     </button>
                 )}
@@ -1426,22 +1754,28 @@ function ReportCard({
                     style={{
                         padding:
                             "10px 14px",
+
                         borderRadius:
                             "10px",
+
                         border:
                             "1px solid #cbd5e1",
+
                         cursor:
                             "pointer",
+
                         background:
                             "#f8fafc",
+
                         color:
                             "#0f172a",
+
                         fontWeight:
                             "600",
                     }}
                 >
                     💬 Comments (
-                    {report.comments}
+                    {report.comments || 0}
                     )
                 </button>
 
@@ -1459,20 +1793,27 @@ function ReportCard({
                         style={{
                             padding:
                                 "10px 14px",
+
                             borderRadius:
                                 "10px",
+
                             border:
                                 "1px solid #cbd5e1",
+
                             cursor:
                                 isLoggedIn
                                     ? "pointer"
                                     : "not-allowed",
+
                             background:
                                 "#f8fafc",
+
                             color:
                                 "#0f172a",
+
                             fontWeight:
                                 "600",
+
                             opacity:
                                 isLoggedIn
                                     ? 1
@@ -1487,7 +1828,7 @@ function ReportCard({
 
 
             {/* =================================================
-                COMMENTS SECTION
+                COMMENTS
             ================================================= */}
 
             {showComments && (
@@ -1559,10 +1900,13 @@ function ReportCard({
                                         style={{
                                             padding:
                                                 "10px 12px",
+
                                             borderRadius:
                                                 "10px",
+
                                             background:
                                                 "#f8fafc",
+
                                             border:
                                                 "1px solid #e2e8f0",
                                         }}
@@ -1579,7 +1923,6 @@ function ReportCard({
                                             }
                                         </strong>
 
-
                                         <div
                                             style={{
                                                 marginTop:
@@ -1592,7 +1935,6 @@ function ReportCard({
                                                 comment.comment
                                             }
                                         </div>
-
 
                                         <small
                                             style={{
@@ -1644,13 +1986,10 @@ function ReportCard({
                                     e
                                 ) =>
                                     setCommentText(
-                                        e.target
-                                            .value
+                                        e.target.value
                                     )
                                 }
-                                placeholder={
-                                    "Add a traffic update..."
-                                }
+                                placeholder="Add a traffic update..."
                                 style={{
                                     flex: 1,
                                     minWidth:
