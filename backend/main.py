@@ -18,6 +18,7 @@ from fastapi.security import (
 
 import jwt
 import bcrypt
+import os
 
 import sqlite3
 from pathlib import Path
@@ -61,7 +62,10 @@ app.add_middleware(
 # DATABASE
 # =========================================================
 
-DATABASE_NAME = "traffic.db"
+DATABASE_NAME = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "traffic.db"
+)
 
 
 def get_db_connection():
@@ -264,10 +268,13 @@ def create_community_tables():
 # INITIALIZE DATABASE TABLES
 # =========================================================
 
-create_users_table()
-create_traffic_data_table()
-create_community_tables()
-
+try:
+    create_users_table()
+    create_traffic_data_table()
+    create_community_tables()
+    print("✅ Database tables initialized successfully")
+except Exception as e:
+    print(f"❌ Database initialization failed: {e}")
 
 # =========================================================
 # JWT SETTINGS
