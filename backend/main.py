@@ -74,6 +74,51 @@ def get_db_connection():
         "PRAGMA foreign_keys = ON"
     )
 
+    # -----------------------------------------------------
+    # ENSURE TRAFFIC DATA TABLE EXISTS
+    # -----------------------------------------------------
+
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS traffic_data (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            cars INTEGER NOT NULL DEFAULT 0,
+            motorcycles INTEGER NOT NULL DEFAULT 0,
+            buses INTEGER NOT NULL DEFAULT 0,
+            trucks INTEGER NOT NULL DEFAULT 0,
+            total_vehicles INTEGER NOT NULL DEFAULT 0,
+            average_vehicles REAL NOT NULL DEFAULT 0,
+            peak_vehicles INTEGER NOT NULL DEFAULT 0,
+            congestion TEXT NOT NULL DEFAULT 'LOW',
+            location TEXT,
+            location_source TEXT,
+            latitude REAL,
+            longitude REAL,
+            user_id INTEGER
+        )
+    """)
+
+    # -----------------------------------------------------
+    # MIGRATION FOR OLD DATABASE
+    # -----------------------------------------------------
+
+    columns = connection.execute(
+        "PRAGMA table_info(traffic_data)"
+    ).fetchall()
+
+    column_names = {
+        column[1]
+        for column in columns
+    }
+
+    if "user_id" not in column_names:
+        connection.execute("""
+            ALTER TABLE traffic_data
+            ADD COLUMN user_id INTEGER
+        """)
+
+    connection.commit()
+
     return connection
 
 
