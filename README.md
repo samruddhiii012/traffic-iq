@@ -228,9 +228,7 @@ traffic-iq/
 ├── README.md                         # Project documentation
 ├── LICENSE                           # Project license
 └── yolo11n.pt                        # YOLO model weights
----
 
----
 
 # 📸 Screenshots
 
@@ -313,11 +311,8 @@ The community module supports creating, confirming, commenting on, filtering, an
 
 ```text
 GET /
-```
-```
 
----
-
+```
 # 🚀 Getting Started
 
 ## 1. Clone the Repository
