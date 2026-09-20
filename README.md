@@ -213,16 +213,19 @@ traffic-iq/
 │   ├── src/                          # ML source code
 │   └── videos/                       # ML input/test videos
 │
-├── docs/                             # Project documentation
-│   └── screenshots/                  # Application screenshots
-│       ├── ai-detection.png
-│       ├── community.png
-│       ├── dashboard.png
-│       ├── history.png
-│       ├── live-monitoring.png
-│       ├── login.png
-│       ├── profile.png
-│       └── report-form.png
+docs/                             # Project documentation
+│
+├── screenshots/                  # Screenshot placeholder directory
+│   └── .gitkeep
+│
+├── ai-detection.png
+├── community.png
+├── dashboard.png
+├── history.png
+├── live-monitoring.png
+├── login.png
+├── profile.png
+└── report-form.png
 │
 ├── uploads/                          # Uploaded images and videos
 ├── processed/                        # AI-processed output files
@@ -241,28 +244,28 @@ traffic-iq/
 # 📸 Screenshots
 
 ### 🏠 Dashboard
-![TrafficIQ Dashboard](docs/screenshots/dashboard.png)
+![TrafficIQ Dashboard](docs/dashboard.png)
 
 ### 🤖 AI Traffic Detection
-![AI Traffic Detection](docs/screenshots/ai-detection.png)
+![AI Traffic Detection](docs/ai-detection.png)
 
 ### 👥 Community Traffic Reports
-![Community Traffic Reports](docs/screenshots/community.png)
+![Community Traffic Reports](docs/community.png)
 
 ### 📝 Report Traffic
-![Report Traffic](docs/screenshots/report-form.png)
+![Report Traffic](docs/report-form.png)
 
 ### 📊 Traffic History
-![Traffic History](docs/screenshots/history.png)
+![Traffic History](docs/history.png)
 
 ### 🚦 Live Monitoring
-![Live Monitoring](docs/screenshots/live-monitoring.png)
+![Live Monitoring](docs/live-monitoring.png)
 
 ### 👤 User Profile
-![User Profile](docs/screenshots/profile.png)
+![User Profile](docs/profile.png)
 
 ### 🔐 Login
-![TrafficIQ Login](docs/screenshots/login.png)
+![TrafficIQ Login](docs/login.png)
 
 ---
 
