@@ -180,55 +180,63 @@ Traffic Information
 
 # 📂 Project Structure
 
-TrafficIQ follows a modular full-stack architecture where the frontend, backend, AI/ML components, documentation, and generated processing files are organized separately.
+TrafficIQ follows a modular full-stack architecture with separate frontend, backend, AI/ML, documentation, and processing directories.
 
 ```text
 traffic-iq/
 │
 ├── frontend/                         # React + Vite frontend
-│   │
+│   ├── public/                       # Static public assets
 │   ├── src/                          # Frontend source code
+│   │   ├── assets/                   # Frontend assets
 │   │   ├── components/               # Reusable UI components
 │   │   ├── pages/                    # Application pages
-│   │   ├── assets/                   # Images and frontend assets
 │   │   ├── App.jsx                   # Main application component
 │   │   └── main.jsx                  # Frontend entry point
-│   │
-│   ├── public/                       # Static public assets
+│   ├── .gitignore                    # Frontend ignored files
+│   ├── eslint.config.js              # ESLint configuration
+│   ├── index.html                    # Frontend HTML entry
 │   ├── package.json                  # Frontend dependencies & scripts
+│   ├── package-lock.json             # Dependency lock file
+│   ├── vercel.json                   # Vercel deployment configuration
 │   ├── vite.config.js                # Vite configuration
-│   └── index.html                    # Frontend HTML entry
+│   └── README.md                     # Frontend documentation
 │
 ├── backend/                          # FastAPI backend
-│   │
-│   ├── main.py                       # API routes, authentication & server logic
-│   ├── traffic_processor.py          # Traffic processing & AI integration
-│   └── requirements.txt              # Python dependencies
+│   ├── database.py                   # Database configuration & initialization
+│   ├── insert_data.py                # Database seed/sample data
+│   ├── main.py                       # API routes & backend server
+│   ├── requirements.txt              # Python dependencies
+│   └── traffic_processor.py          # Traffic processing & AI integration
 │
 ├── ml/                               # Machine Learning components
-│   └── YOLO / Computer Vision        # Vehicle detection & traffic analysis
+│   ├── src/                          # ML source code
+│   └── videos/                       # ML input/test videos
 │
 ├── docs/                             # Project documentation
-│   │
 │   └── screenshots/                  # Application screenshots
-│       ├── dashboard.png
 │       ├── ai-detection.png
 │       ├── community.png
-│       ├── report-form.png
+│       ├── dashboard.png
 │       ├── history.png
 │       ├── live-monitoring.png
+│       ├── login.png
 │       ├── profile.png
-│       └── login.png
+│       └── report-form.png
 │
-├── uploads/                          # Uploaded images/videos
+├── uploads/                          # Uploaded images and videos
 ├── processed/                        # AI-processed output files
 ├── runs/                             # YOLO detection results
+│   └── detect/                       # Detection outputs
 │
 ├── .gitignore                        # Ignored files & directories
-├── README.md                         # Project documentation
-├── LICENSE                           # Project license
+├── LICENSE                           # MIT License
+├── README.md                         # Main project documentation
 └── yolo11n.pt                        # YOLO model weights
+```
 
+> Note: Local SQLite database files such as `traffic.db` are excluded from the repository using `.gitignore`.
+---
 
 # 📸 Screenshots
 
@@ -311,8 +319,11 @@ The community module supports creating, confirming, commenting on, filtering, an
 
 ```text
 GET /
-
 ```
+
+
+---
+
 # 🚀 Getting Started
 
 ## 1. Clone the Repository
@@ -376,7 +387,7 @@ DATABASE_PATH=/app/data/traffic.db
 ```
 
 Do not commit `.env` files, API keys, passwords, or production secrets.
-```
+
 
 # 🗄️ Database
 
